@@ -1,6 +1,4 @@
 import mongoose from "mongoose";
-// If you need helper functions from pollHelpers.js in this model, import them like this:
-// import { yourHelperFunction } from "../utils/pollHelpers.js";
 
 const voteSchema = new mongoose.Schema(
   {
@@ -16,7 +14,7 @@ const voteSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  },
+  }
 );
 
 export const Vote = mongoose.model("Vote", voteSchema);
@@ -40,8 +38,8 @@ const pollSchema = new mongoose.Schema(
     },
     options: [
       {
-        text: String,
-        image: String,
+        text: { type: String, default: "" },
+        image: { type: String, default: "" },
       },
     ],
     category: {
@@ -60,8 +58,8 @@ const pollSchema = new mongoose.Schema(
     votes: [voteSchema],
   },
   {
-    timestamps: true, // Added timestamps to track when polls are created/updated
-  },
+    timestamps: true,
+  }
 );
 
 export const Poll = mongoose.model("Poll", pollSchema);

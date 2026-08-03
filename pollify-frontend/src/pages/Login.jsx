@@ -35,6 +35,42 @@ export default function Login() {
     }));
   };
 
+  // async function handleSubmit(e) {
+  //   e.preventDefault();
+  //   setError("");
+  //   setLoading(true);
+
+  //   try {
+  //     const response = await fetch("http://localhost:3500/api/auth/login", {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify(formData),
+  //     });
+
+  //     const data = await response.json();
+
+  //     // Check if user needs email verification first
+  //     if (response.status === 403 && data.needsVerification) {
+  //       toast.info(data.message || "Please verify your email before logging in.");
+  //       navigate("/verify-email", { state: { email: formData.email } });
+  //       return;
+  //     }
+
+  //     if (!response.ok || !data.success) {
+  //       throw new Error(data.message || "Invalid email or password.");
+  //     }
+
+  //     login(data.user || data);
+  //     toast.success(data.message || "Welcome back!");
+  //     navigate("/");
+  //   } catch (err) {
+  //     setError(err.message || "An unexpected error occurred.");
+  //     toast.error(err.message || "Login failed.");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
@@ -48,21 +84,44 @@ export default function Login() {
       });
 
       const data = await response.json();
+      console.log("Login Response:", data);
 
-      // Check if user needs email verification first
-      if (response.status === 403 && data.needsVerification) {
-        toast.info(
-          data.message || "Please verify your email before logging in.",
-        );
-        navigate("/verify-email", { state: { email: formData.email } });
-        return;
+      // Catch verification requirement whether status is 403, 400, or explicitly flagged in data
+      if (
+        data.isVerified === false ||
+        response.status === 403 ||
+        response.status === 400
+      ) {
+        if (data.isVerified === false || data.needVerification) {
+          toast.info(
+            data.message || "Please verify your email before logging in.",
+          );
+          navigate("/verify-email", { state: { email: formData.email } });
+          return;
+        }
       }
 
       if (!response.ok || !data.success) {
         throw new Error(data.message || "Invalid email or password.");
       }
 
-      login(data.user || data);
+      // --- FIX APPLIED HERE ---
+      // 1. Extract raw token string directly from response
+      const token = data.token;
+
+      // 2. Extract user object (backend returns `findUser`)
+      const user = data.findUser || data.user;
+
+      if (!token) {
+        throw new Error("No token received from server.");
+      }
+
+      // Save token as a clean raw string
+      localStorage.setItem("token", token);
+
+      // Pass structured data to your Auth Context / state handler
+      login({ token, user });
+
       toast.success(data.message || "Welcome back!");
       navigate("/");
     } catch (err) {

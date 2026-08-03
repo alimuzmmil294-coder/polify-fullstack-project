@@ -1,37 +1,44 @@
-import jwt from "jsonwebtoken";
+import jwt, { decode } from "jsonwebtoken";
 
 export const protect = async (req, res, next) => {
   const header = req.headers.authorization || "";
+  let token = header.startsWith("Bearer ") ? header.split(" ")[1] : null;
+  console.log("auth token :" + token);
 
-  const token = header.startsWith("Bearer ") ? header.split(" ")[1] : null;
+  if (token) {
+    token = token.replace(/^"(.*)"$/, "$1").trim();
+  }
 
-  if (!token) {
+  if (!token || token === "undefined" || token === "null") {
     return res.status(401).json({
-      message: "Not authorized, token missing.",
+      message: "No authentication token provided.",
       success: false,
     });
   }
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log(decoded);
-
-    // Make sure your JWT payload actually uses 'id' (e.g. jwt.sign({ id: user._id }))
-    // If you signed it with { userId: user._id }, change this to decoded.userId
+    console.log("auth decoded :" + decoded);
     req.userId = decoded.id || decoded.userId || decoded._id;
-    console.log(req.userId);
-    
+
     if (!req.userId) {
       return res.status(401).json({
-        message: "Invalid token payload.",
+        message: "Invalid token payload structure.",
         success: false,
       });
     }
 
     next();
   } catch (error) {
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({
+        message: "Your session has expired. Please log in again.",
+        success: false,
+      });
+    }
+
     return res.status(401).json({
-      message: error.message || "Not authorized, token failed.",
+      message: "Authentication failed. Token invalid.",
       success: false,
     });
   }

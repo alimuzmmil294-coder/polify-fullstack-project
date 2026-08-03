@@ -11,17 +11,32 @@ import Voted from "./pages/Voted";
 import Saved from "./pages/Saved";
 import Settings from "./pages/Settings";
 
+// Spinner/Loader placeholder while restoring session
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+    </div>
+  );
+}
+
 // Protects routes that require authentication
 function Protected({ children }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
+
   return <Layout>{children}</Layout>;
 }
 
 // Redirects already-authenticated users away from auth pages
 function PublicOnly({ children }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  if (loading) return <LoadingScreen />;
   if (user) return <Navigate to="/" replace />;
+
   return children;
 }
 

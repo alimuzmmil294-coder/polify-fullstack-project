@@ -1,32 +1,39 @@
-import { createContext, useContext, useState } from "react";
-import { createCurrentUser } from "../data/mockData";
+import { createContext, useContext, useState, useEffect } from "react";
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [email, setEmail] = useState("");
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true); // 👈 Track initialization
 
-  // Set user after successful login/signup from a component
-  function login(userData) {
-    const nextUser = createCurrentUser(
-      userData?.name || userData?.email?.split("@")[0] || "User",
-      userData?.email || "",
-      userData?.handle || ""
-    );
+  useEffect(() => {
+    // Check if user data / token exists in localStorage on page load
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (err) {
+        console.error("Failed to parse stored user", err);
+        localStorage.removeItem("user");
+      }
+    }
+    setLoading(false); // 👈 Initialization finished!
+  }, []);
 
-    setUser(nextUser);
-    setEmail(userData?.email || "");
-  }
+  const login = (userData, token) => {
+    setUser(userData);
+    localStorage.setItem("user", JSON.stringify(userData));
+    if (token) localStorage.setItem("token", token);
+  };
 
-  // Clear user state on logout
-  function logout() {
+  const logout = () => {
     setUser(null);
-    setEmail("");
-  }
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+  };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, login, logout, email, setEmail }}>
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

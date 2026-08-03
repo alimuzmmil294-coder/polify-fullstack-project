@@ -174,23 +174,23 @@ export const Login = async (req, res) => {
 
     // 1. Find user by email
     const findUser = await User.findOne({ email });
-    console.log("User found:", findUser?.email); // Debug check
+    // console.log("User found:", findUser?.email); // Debug check
 
     // Stop early if user doesn't exist (prevents findUser.password crash)
     if (!findUser) {
       return res.status(400).json({
-        message: "Invalid credentials.. Email",
+        message: "Invalid credentials.. ",
         success: false,
       });
     }
 
     // 2. Compare password only after confirming user exists
     const comparePassword = await bcrypt.compare(password, findUser.password);
-    console.log("Password comparison result:", comparePassword); // Debug check
+    // console.log("Password comparison result:", comparePassword); // Debug check
 
     if (!comparePassword) {
       return res.status(400).json({
-        message: "Invalid credentials.. Password",
+        message: "Invalid credentials..",
         success: false,
       });
     }

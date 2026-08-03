@@ -5,9 +5,9 @@ import { Comment } from "../modals/Comment.js";
 import mongoose from "mongoose";
 import { shapePoll } from "../utils/pollShape.js";
 
-const POP = ["creator", "name username avatar"];
+// Corrected populate path format
+const POP = [{ path: "creator", select: "name username avatar" }];
 
-// Helper function to resolve the missing 'withCounts' reference
 const withCounts = async (polls) => {
   if (!polls || !polls.length) return [];
 
@@ -22,13 +22,17 @@ const withCounts = async (polls) => {
     return acc;
   }, {});
 
-  return polls.map((p) => ({
-    ...p,
-    commentsCount: countMap[p._id.toString()] || 0,
-  }));
+  return polls.map((p) => {
+    const pObj = p.toObject ? p.toObject() : p;
+    return {
+      ...pObj,
+      commentsCount: countMap[p._id.toString()] || 0,
+    };
+  });
 };
 
 const bookmarkSet = async (userId) => {
+  if (!userId) return new Set();
   const me = await User.findById(userId).select("bookmarks");
   return new Set((me?.bookmarks || []).map(String));
 };
@@ -36,15 +40,18 @@ const bookmarkSet = async (userId) => {
 export const createPoll = async (req, res) => {
   try {
     const { question, category, type } = req.body;
+    const userId = req.userId || req.user?._id || req.user?.id;
 
     if (!question || !type) {
       return res.status(400).json({
         message: "Question and Type are required.",
         success: false,
       });
+      
     }
 
     let options = [];
+
     if (type === "yesno") {
       options = [{ text: "Yes" }, { text: "No" }];
     } else if (type === "single") {
@@ -54,47 +61,53 @@ export const createPoll = async (req, res) => {
           : req.body.options || [];
 
       options = parsed
-        .filter((t) => t && t.trim())
-        .map((t) => ({ text: t.trim() }));
-      if (options.length < 2)
+        .filter((t) => t && String(t).trim())
+        .map((t) => ({ text: String(t).trim() }));
+
+      if (options.length < 2) {
         return res
           .status(400)
-          .json({ message: "Add at least 2 options", success: false });
+          .json({ message: "Add at least 2 options.", success: false });
+      }
     } else if (type === "image") {
-      if (!req.files || req.files.length < 2)
+      if (!req.files || req.files.length < 2) {
         return res
           .status(400)
-          .json({ message: "Add at least 2 images", success: false });
+          .json({ message: "Add at least 2 images.", success: false });
+      }
       const urls = await Promise.all(
         req.files.map((f) => uploadToCloudinary(f.buffer)),
       );
       options = urls.map((image) => ({ image, text: "" }));
+    } else if (type === "rating" || type === "open") {
+      options = [];
     }
 
     const poll = await Poll.create({
-      creator: req.userId,
+      creator: userId,
       question,
       type,
-      category,
+      category: category || "General",
       options,
     });
 
-    res.status(201).json({ success: true, poll });
+    const populatedPoll = await Poll.findById(poll._id).populate(POP);
+
+    return res.status(201).json({ success: true, poll: populatedPoll });
   } catch (error) {
     return res.status(500).json({
-      message: error.message || "Server error",
+      message: error.message || "Server error while creating poll.",
       success: false,
     });
   }
 };
 
 const sendList = async (filter, req, res) => {
-  const polls = await Poll.find(filter)
-    .populate(...POP)
-    .sort("-createdAt");
+  const userId = req.userId || req.user?._id || req.user?.id;
+  const polls = await Poll.find(filter).populate(POP).sort("-createdAt");
 
-  const set = await bookmarkSet(req.userId);
-  const shaped = polls.map((p) => shapePoll(p, req.userId, set));
+  const set = await bookmarkSet(userId);
+  const shaped = polls.map((p) => shapePoll(p, userId, set));
   res.json(await withCounts(shaped));
 };
 
@@ -102,11 +115,13 @@ export const listPolls = async (req, res) => {
   try {
     const filter = {};
 
-    if (req.query.type && req.query.type !== "all")
+    if (req.query.type && req.query.type !== "all") {
       filter.type = req.query.type;
+    }
     if (req.query.category) filter.category = req.query.category;
     if (req.query.feed === "following") {
-      const me = await User.findById(req.userId).select("following");
+      const userId = req.userId || req.user?._id || req.user?.id;
+      const me = await User.findById(userId).select("following");
       filter.creator = { $in: me?.following || [] };
     }
     await sendList(filter, req, res);
@@ -125,7 +140,7 @@ export const getMyPolls = async (req, res) => {
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message: "User ID not found in request context",
+        message: "User context not found.",
       });
     }
     const creatorId = new mongoose.Types.ObjectId(userId);
@@ -152,15 +167,14 @@ export const getVotedPolls = async (req, res) => {
 
 export const getBookmarks = async (req, res) => {
   try {
-    const me = await User.findById(req.userId).populate({
+    const userId = req.userId || req.user?._id || req.user?.id;
+    const me = await User.findById(userId).populate({
       path: "bookmarks",
-      populate: { path: "creator", select: "name username avatar" },
+      populate: POP[0],
     });
 
     const set = new Set((me?.bookmarks || []).map((p) => String(p._id)));
-    const shaped = (me?.bookmarks || []).map((p) =>
-      shapePoll(p, req.userId, set),
-    );
+    const shaped = (me?.bookmarks || []).map((p) => shapePoll(p, userId, set));
 
     res.json(await withCounts(shaped));
   } catch (error) {
@@ -194,14 +208,15 @@ export const getTrending = async (req, res) => {
 
 export const getPoll = async (req, res) => {
   try {
-    const poll = await Poll.findById(req.params.id).populate(...POP);
+    const userId = req.userId || req.user?._id || req.user?.id;
+    const poll = await Poll.findById(req.params.id).populate(POP);
     if (!poll)
       return res
         .status(404)
-        .json({ message: "Poll not found", success: false });
+        .json({ message: "Poll not found.", success: false });
 
     const creatorId = poll.creator?._id || poll.creator;
-    const isCreator = String(creatorId) === String(req.userId);
+    const isCreator = String(creatorId) === String(userId);
     const skipView = req.query.noview === "true";
 
     if (!isCreator && !skipView) {
@@ -209,8 +224,8 @@ export const getPoll = async (req, res) => {
       await poll.save();
     }
 
-    const set = await bookmarkSet(req.userId);
-    const [shaped] = await withCounts([shapePoll(poll, req.userId, set)]);
+    const set = await bookmarkSet(userId);
+    const [shaped] = await withCounts([shapePoll(poll, userId, set)]);
     res.json(shaped);
   } catch (err) {
     res.status(500).json({ message: err.message, success: false });
@@ -219,7 +234,8 @@ export const getPoll = async (req, res) => {
 
 export const getPollAnalytics = async (req, res) => {
   try {
-    const poll = await Poll.findById(req.params.id).populate(...POP);
+    const userId = req.userId || req.user?._id || req.user?.id;
+    const poll = await Poll.findById(req.params.id).populate(POP);
     if (!poll) {
       return res.status(404).json({
         message: "Poll not found.",
@@ -227,14 +243,14 @@ export const getPollAnalytics = async (req, res) => {
       });
     }
 
-    if (String(poll.creator._id) !== String(req.userId)) {
+    if (String(poll.creator._id) !== String(userId)) {
       return res.status(403).json({
         message: "Not authorized to view analytics for this poll.",
         success: false,
       });
     }
-    const set = await bookmarkSet(req.userId);
-    const shaped = shapePoll(poll, req.userId, set);
+    const set = await bookmarkSet(userId);
+    const shaped = shapePoll(poll, userId, set);
 
     const comments = await Comment.countDocuments({ poll: poll._id });
     res.json({ poll: shaped, comments });
