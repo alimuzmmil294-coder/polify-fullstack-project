@@ -10,10 +10,26 @@ const app = express();
 // 3. Connect to database
 dbConnection();
 
-app.use(cors({
-  origin:"https://polify-fullstack-project-ao42.vercel.app/",
-  credentials:true
-}))
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "https://polify-fullstack-project-ao42.vercel.app",
+];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS origin denied: ${origin}`));
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
 app.use(express.json());
 
 app.use("/api", allRoutes);
