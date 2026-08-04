@@ -1,7 +1,7 @@
 import { uploadToCloudinary } from "../configs/cloudinary.js";
 import { User } from "../modals/authModal.js";
 import { Poll } from "../modals/Poll.js";
-import { Comment } from "../modals/Comment.js";
+import { Comment } from "../modals/comment.js";
 import mongoose from "mongoose";
 import { shapePoll } from "../utils/pollShape.js";
 

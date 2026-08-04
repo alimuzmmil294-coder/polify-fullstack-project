@@ -2,54 +2,102 @@ import { Comment } from "../modals/comment.js";
 import { Poll } from "../modals/Poll.js";
 import { notify } from "./notification.js";
 
+// import { Poll } from "../modals/Poll.js";
+// import { notify } from "./notification.js";
+
 export const votePoll = async (req, res) => {
   try {
     const poll = await Poll.findById(req.params.id);
     if (!poll) {
       return res.status(404).json({
-        message: "Poll not found....",
+        message: "Poll not found.",
         success: false,
       });
     }
+
     if (poll.closed) {
       return res.status(400).json({
-        message: "This poll is closed..",
+        message: "This poll is closed.",
         success: false,
       });
     }
-    const { value } = req.body;
-    if (value === undefined || value === null || value == "") {
+
+    // Accepts either optionId or value from body
+    const { value, optionId } = req.body;
+    const voteChoice = optionId || value;
+
+    if (!voteChoice) {
       return res.status(400).json({
-        message: "Vote value is required...",
+        message: "Vote value or optionId is required.",
         success: false,
       });
     }
-    const hadVote = poll.votes.some(
-      (v) => Stirng(v.user) === String(req.userid),
-    );
 
-    poll.votes = poll.votes.filter(
-      (v) => Stirng(v.user) !== String(req.userid),
-    );
+    const userId = req.userId || req.user?._id || req.user?.id;
 
+    if (!userId) {
+      return res.status(401).json({
+        message: "Unauthorized: User identification missing.",
+        success: false,
+      });
+    }
+
+    // Check if user previously voted
+    const existingVoteIndex = poll.votes.findIndex(
+      (v) => String(v.user) === String(userId),
+    );
+    const hadVote = existingVoteIndex !== -1;
+
+    if (hadVote) {
+      // Decrement vote count on previous option if present
+      const prevOptionId =
+        poll.votes[existingVoteIndex].option ||
+        poll.votes[existingVoteIndex].value;
+      const prevOpt = poll.options.find(
+        (o) => String(o._id || o.id) === String(prevOptionId),
+      );
+      if (prevOpt && prevOpt.votes > 0) {
+        prevOpt.votes -= 1;
+      }
+      // Remove previous vote entry
+      poll.votes.splice(existingVoteIndex, 1);
+    }
+
+    // Add new vote entry
     poll.votes.push({
-      user: req.userId,
-      value,
+      user: userId,
+      option: voteChoice,
+      value: voteChoice,
     });
+
+    // Increment vote count on selected option
+    const targetOpt = poll.options.find(
+      (o) => String(o._id || o.id) === String(voteChoice),
+    );
+    if (targetOpt) {
+      targetOpt.votes = (targetOpt.votes || 0) + 1;
+    }
 
     await poll.save();
 
-    if (!hadVote)
+    // Trigger notification if first-time vote on someone else's poll
+    if (!hadVote && String(poll.creator) !== String(userId)) {
       await notify({
         user: poll.creator,
-        actor: req.userId,
+        actor: userId,
         poll: poll._id,
-        type: "vore",
-      });
-    res.json({ message: "vote recorded..." });
+        type: "vote",
+      }).catch((err) => console.error("Notification Error:", err));
+    }
+
+    return res.json({
+      success: true,
+      message: "Vote recorded successfully.",
+      poll,
+    });
   } catch (error) {
-    res.status(501).json({
-      message: error.message,
+    return res.status(500).json({
+      message: error.message || "Server error processing vote.",
       success: false,
     });
   }
@@ -87,7 +135,7 @@ export const removeVote = async (req, res) => {
 };
 
 const ownerGuard = (poll, userid) =>
-  poll && Stirng(poll.creator) === Stirng(userId);
+  poll && String(poll.creator) === String(userId);
 
 export const updatePoll = async (req, res) => {
   try {
@@ -152,7 +200,6 @@ export const deletePoll = async (req, res) => {
       message: "Poll deleted successfully...",
       success: true,
     });
-    
   } catch (error) {
     res.status(501).json({
       message: error.message,
