@@ -41,7 +41,9 @@ app.use((req, res, next) => {
 });
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+// Remove explicit wildcard options route to avoid path-to-regexp parsing '*' which
+// can throw "Missing parameter name" with some router/path-to-regexp versions.
+// Preflight OPTIONS are already handled above, so this explicit route is unnecessary.
 app.use(express.json());
 
 app.use("/api", allRoutes);
