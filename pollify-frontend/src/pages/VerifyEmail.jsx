@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { MailCheck, ArrowRight, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "react-toastify";
+import { API_BASE_URL } from "../config.js";
 
 export default function VerifyEmail() {
   const location = useLocation();
@@ -17,14 +18,11 @@ export default function VerifyEmail() {
     setLoading(true);
 
     try {
-      const response = await fetch(
-        "http://localhost:3500/api/auth/verify-otp",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, code }),
-        },
-      );
+      const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code }),
+      });
 
       const data = await response.json();
 
@@ -51,14 +49,11 @@ export default function VerifyEmail() {
 
     setResending(true);
     try {
-      const response = await fetch(
-        "http://localhost:3500/api/auth/resend-otp",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        },
-      );
+      const response = await fetch(`${API_BASE_URL}/auth/resend-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
 
       const data = await response.json();
 

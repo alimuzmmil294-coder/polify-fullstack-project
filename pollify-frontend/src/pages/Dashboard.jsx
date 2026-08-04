@@ -3,6 +3,7 @@ import Icon from "../components/Icon";
 import PollCard from "../components/PollCard";
 import { filterTabs } from "../data/mockData";
 import { useAuth } from "../context/AuthContext";
+import { API_BASE_URL } from "../config.js";
 
 const typeMap = {
   "Yes / No": "yesno",
@@ -11,8 +12,6 @@ const typeMap = {
   Image: "image",
   "Open Ended": "open",
 };
-
-const API_BASE_URL = "http://localhost:3500/api";
 
 export default function Dashboard() {
   const { user, email, token } = useAuth();

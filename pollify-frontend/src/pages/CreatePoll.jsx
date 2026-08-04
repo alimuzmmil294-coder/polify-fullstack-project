@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Icon from "../components/Icon";
 import { Plus, Trash2, Upload, User } from "lucide-react";
 import { toast } from "react-toastify";
+import { API_BASE_URL } from "../config.js";
 
 const pollTypes = [
   { key: "single", label: "Single Choice", icon: "list" },
@@ -115,7 +116,7 @@ export default function CreatePoll() {
           if (file) payload.append("files", file);
         });
 
-        response = await fetch("http://localhost:3500/api/polls/", {
+        response = await fetch(`${API_BASE_URL}/polls/`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -130,7 +131,7 @@ export default function CreatePoll() {
           options: type === "single" ? options.filter((o) => o.trim()) : [],
         };
 
-        response = await fetch("http://localhost:3500/api/polls/", {
+        response = await fetch(`${API_BASE_URL}/polls/`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

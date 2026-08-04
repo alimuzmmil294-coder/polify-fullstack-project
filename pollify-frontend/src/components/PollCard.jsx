@@ -1,8 +1,7 @@
 import { useState } from "react";
 import Icon from "./Icon";
 import { useAuth } from "../context/AuthContext";
-
-const API_BASE_URL = "http://localhost:3500/api";
+import { API_BASE_URL } from "../config.js";
 
 const avatarColors = [
   "#10b981",

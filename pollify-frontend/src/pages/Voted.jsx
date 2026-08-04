@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import PollCard from "../components/PollCard";
 import EmptyState from "../components/EmptyState";
 import { useAuth } from "../context/AuthContext";
-
-const API_BASE_URL = "http://localhost:3500/api";
+import { API_BASE_URL } from "../config.js";
 
 export default function Voted() {
   const { token } = useAuth();
