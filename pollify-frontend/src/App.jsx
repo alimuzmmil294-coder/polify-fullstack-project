@@ -10,6 +10,7 @@ import MyPolls from "./pages/MyPolls";
 import Voted from "./pages/Voted";
 import Saved from "./pages/Saved";
 import Settings from "./pages/Settings";
+import { PollProvider } from "./context/PollContext";
 
 // Spinner/Loader placeholder while restoring session
 function LoadingScreen() {
@@ -128,7 +129,9 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppRoutes />
+      <PollProvider>
+        <AppRoutes />
+      </PollProvider>
     </AuthProvider>
   );
 }

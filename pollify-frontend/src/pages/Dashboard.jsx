@@ -3,6 +3,7 @@ import Icon from "../components/Icon";
 import PollCard from "../components/PollCard";
 import { filterTabs } from "../data/mockData";
 import { useAuth } from "../context/AuthContext";
+import { usePolls } from "../context/PollContext";
 import { API_BASE_URL } from "../config.js";
 
 const typeMap = {
@@ -15,12 +16,12 @@ const typeMap = {
 
 export default function Dashboard() {
   const { user, email, token } = useAuth();
+  const { polls, setAllPolls, addPoll } = usePolls();
   const [tab, setTab] = useState("Explore");
   const [filter, setFilter] = useState("All");
   const [question, setQuestion] = useState("");
 
   // Data fetching states
-  const [polls, setPolls] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPosting, setIsPosting] = useState(false);
   const [error, setError] = useState(null);
@@ -34,13 +35,18 @@ export default function Dashboard() {
         setIsLoading(true);
         setError(null);
 
-        // Fetch all community polls without filtering by user ID
+        // Explicitly format Authorization header; ensure request handles public/protected modes correctly
+        const headers = {
+          "Content-Type": "application/json",
+        };
+
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+
         const response = await fetch(`${API_BASE_URL}/polls`, {
           method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token && { Authorization: `Bearer ${token}` }),
-          },
+          headers,
         });
 
         if (!response.ok) {
@@ -55,7 +61,7 @@ export default function Dashboard() {
 
         // Flexibly handle array or object wrapper response ({ polls: [...] })
         const pollsList = Array.isArray(data) ? data : data.polls || [];
-        setPolls(pollsList);
+        setAllPolls(pollsList);
       } catch (err) {
         console.error("Error fetching polls:", err);
         setError(err.message || "Failed to load polls");
@@ -73,6 +79,12 @@ export default function Dashboard() {
     const trimmedQuestion = question.trim();
     if (!trimmedQuestion || isPosting) return;
 
+    // Check for missing auth token before sending post request
+    if (!token) {
+      alert("You must be logged in to create a poll.");
+      return;
+    }
+
     try {
       setIsPosting(true);
 
@@ -80,7 +92,7 @@ export default function Dashboard() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(token && { Authorization: `Bearer ${token}` }),
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           question: trimmedQuestion,
@@ -96,8 +108,8 @@ export default function Dashboard() {
 
       const newPoll = await response.json();
 
-      // Prepend newly created poll directly to the global feed state
-      setPolls((prev) => [newPoll.poll || newPoll, ...prev]);
+      // Update the shared poll list so the stats panel and feed stay in sync
+      addPoll(newPoll);
       setQuestion("");
     } catch (err) {
       console.error("Failed to create poll:", err);

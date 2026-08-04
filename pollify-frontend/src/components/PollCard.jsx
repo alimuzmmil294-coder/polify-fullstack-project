@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Icon from "./Icon";
 import { useAuth } from "../context/AuthContext";
+import { usePolls } from "../context/PollContext";
 import { API_BASE_URL } from "../config.js";
 
 const avatarColors = [
@@ -21,6 +22,7 @@ function colorFor(name = "User") {
 
 export default function PollCard({ poll }) {
   const { token, user } = useAuth();
+  const { deletePoll } = usePolls();
 
   // Safe extraction of author attributes whether string or object
   const authorName =
@@ -45,6 +47,15 @@ export default function PollCard({ poll }) {
 
   const pollId = poll.id || poll._id;
   const totalVotes = options.reduce((sum, o) => sum + (o.votes || 0), 0);
+  const isOwner = Boolean(
+    user &&
+      (poll.authorId === user.id ||
+        poll.authorId === user._id ||
+        poll.author?._id === user.id ||
+        poll.author?._id === user._id ||
+        poll.author?.id === user.id ||
+        poll.author?.id === user._id)
+  );
 
   // Send vote choice to backend
   async function vote(optionId) {
@@ -108,6 +119,30 @@ export default function PollCard({ poll }) {
     }
   }
 
+  async function handleDelete() {
+    if (!window.confirm("Delete this poll?")) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/polls/${pollId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        throw new Error(errBody.message || "Failed to delete poll");
+      }
+
+      deletePoll(pollId);
+    } catch (err) {
+      console.error("Failed to delete poll:", err);
+      alert(err.message || "Could not delete the poll.");
+    }
+  }
+
   return (
     <article className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-5 hover:border-[var(--color-border-light)] transition-colors">
       <div className="flex items-center justify-between mb-3">
@@ -126,11 +161,22 @@ export default function PollCard({ poll }) {
             </span>
           </p>
         </div>
-        {poll.tag && (
-          <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-[var(--color-warning)]/15 text-[var(--color-warning)]">
-            {poll.tag}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {poll.tag && (
+            <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-[var(--color-warning)]/15 text-[var(--color-warning)]">
+              {poll.tag}
+            </span>
+          )}
+          {isOwner && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="text-xs font-medium text-red-400 hover:text-red-300 transition-colors"
+            >
+              Delete
+            </button>
+          )}
+        </div>
       </div>
 
       <h3 className="font-semibold text-lg mb-4">{poll.question}</h3>

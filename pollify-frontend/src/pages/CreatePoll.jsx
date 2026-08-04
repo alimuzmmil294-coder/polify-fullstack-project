@@ -4,6 +4,7 @@ import Icon from "../components/Icon";
 import { Plus, Trash2, Upload, User } from "lucide-react";
 import { toast } from "react-toastify";
 import { API_BASE_URL } from "../config.js";
+import { usePolls } from "../context/PollContext";
 
 const pollTypes = [
   { key: "single", label: "Single Choice", icon: "list" },
@@ -15,6 +16,7 @@ const pollTypes = [
 
 export default function CreatePoll() {
   const navigate = useNavigate();
+  const { addPoll } = usePolls();
 
   // Consolidated Single State
   const [formData, setFormData] = useState({
@@ -147,6 +149,7 @@ export default function CreatePoll() {
         throw new Error(data.message || "Failed to create poll.");
       }
 
+      addPoll(data.poll || data);
       toast.success("Poll created successfully!");
       navigate("/");
     } catch (err) {
