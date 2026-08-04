@@ -130,7 +130,7 @@ export default function CreatePoll() {
           options: type === "single" ? options.filter((o) => o.trim()) : [],
         };
 
-        response = await fetch("http://localhost:3500/api/polls", {
+        response = await fetch("http://localhost:3500/api/polls/", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

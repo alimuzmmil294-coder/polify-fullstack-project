@@ -18,7 +18,13 @@ export const shapePoll = (poll, userId, bookmarkSet = new Set()) => {
   } else {
     results = (poll.options || []).map((opt, i) => {
       const count = votes.filter((v) => Number(v.value) === i).length;
-      return { text: opt.text, image: opt.image, index: i, count, percent: pct(count) };
+      return {
+        text: opt.text,
+        image: opt.image,
+        index: i,
+        count,
+        percent: pct(count),
+      };
     });
   }
 

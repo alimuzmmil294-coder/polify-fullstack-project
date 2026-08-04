@@ -1,36 +1,112 @@
 import { useState } from "react";
 import Icon from "./Icon";
+import { useAuth } from "../context/AuthContext";
+
+const API_BASE_URL = "http://localhost:3500/api";
 
 const avatarColors = [
-  "#10b981", "#38bdf8", "#a78bfa", "#f59e0b", "#f472b6", "#f87171",
+  "#10b981",
+  "#38bdf8",
+  "#a78bfa",
+  "#f59e0b",
+  "#f472b6",
+  "#f87171",
 ];
 
-function colorFor(name) {
+function colorFor(name = "User") {
   let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < name.length; i++)
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
   return avatarColors[Math.abs(hash) % avatarColors.length];
 }
 
 export default function PollCard({ poll }) {
-  const [votedId, setVotedId] = useState(null);
-  const [options, setOptions] = useState(poll.options);
-  const [upvoted, setUpvoted] = useState(false);
-  const [upvotes, setUpvotes] = useState(poll.upvotes);
-  const [saved, setSaved] = useState(false);
+  const { token, user } = useAuth();
 
-  const totalVotes = options.reduce((sum, o) => sum + o.votes, 0);
+  // Safe extraction of author attributes whether string or object
+  const authorName =
+    typeof poll.author === "string"
+      ? poll.author
+      : poll.author?.name || "Unknown";
+  const authorHandle =
+    poll.handle ||
+    poll.author?.handle ||
+    `@${authorName.toLowerCase().replace(/\s+/g, "")}`;
+  const pollTime =
+    poll.time ||
+    (poll.createdAt
+      ? new Date(poll.createdAt).toLocaleDateString()
+      : "Just now");
 
-  function vote(id) {
-    if (votedId) return;
-    setVotedId(id);
+  const [votedId, setVotedId] = useState(poll.userVotedOptionId || null);
+  const [options, setOptions] = useState(poll.options || []);
+  const [upvoted, setUpvoted] = useState(poll.isUpvoted || false);
+  const [upvotes, setUpvotes] = useState(poll.upvotes || 0);
+  const [saved, setSaved] = useState(poll.isSaved || false);
+
+  const pollId = poll.id || poll._id;
+  const totalVotes = options.reduce((sum, o) => sum + (o.votes || 0), 0);
+
+  // Send vote choice to backend
+  async function vote(optionId) {
+    if (votedId) return; // Prevent double voting locally
+
+    // Optimistic UI Update
+    setVotedId(optionId);
     setOptions((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, votes: o.votes + 1 } : o))
+      prev.map((o) => {
+        const oId = o.id || o._id;
+        return oId === optionId ? { ...o, votes: (o.votes || 0) + 1 } : o;
+      }),
     );
+
+    try {
+      await fetch(`${API_BASE_URL}/polls/${pollId}/vote`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify({ optionId, userId: user?.id || user?._id }),
+      });
+    } catch (err) {
+      console.error("Failed to submit vote:", err);
+    }
   }
 
-  function toggleUpvote() {
-    setUpvoted((v) => !v);
-    setUpvotes((v) => (upvoted ? v - 1 : v + 1));
+  // Send Upvote toggle to backend
+  async function toggleUpvote() {
+    const nextUpvoted = !upvoted;
+    setUpvoted(nextUpvoted);
+    setUpvotes((v) => (nextUpvoted ? v + 1 : v - 1));
+
+    try {
+      await fetch(`${API_BASE_URL}/polls/${pollId}/upvote`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+    } catch (err) {
+      console.error("Failed to toggle upvote:", err);
+    }
+  }
+
+  // Save/Bookmark toggle
+  async function toggleBookmark() {
+    setSaved((s) => !s);
+    try {
+      await fetch(`${API_BASE_URL}/polls/${pollId}/save`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+    } catch (err) {
+      console.error("Failed to bookmark poll:", err);
+    }
   }
 
   return (
@@ -38,14 +114,17 @@ export default function PollCard({ poll }) {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2.5">
           <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-black"
-            style={{ backgroundColor: colorFor(poll.author) }}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-black shrink-0"
+            style={{ backgroundColor: colorFor(authorName) }}
           >
-            {poll.author.charAt(0)}
+            {authorName.charAt(0).toUpperCase()}
           </div>
           <p className="text-sm">
-            <span className="font-semibold">{poll.author}</span>
-            <span className="text-[var(--color-text-faint)]"> - {poll.handle} - {poll.time}</span>
+            <span className="font-semibold">{authorName}</span>
+            <span className="text-[var(--color-text-faint)]">
+              {" "}
+              - {authorHandle} - {pollTime}
+            </span>
           </p>
         </div>
         {poll.tag && (
@@ -58,44 +137,60 @@ export default function PollCard({ poll }) {
       <h3 className="font-semibold text-lg mb-4">{poll.question}</h3>
 
       {poll.type === "rating" ? (
-        <RatingPoll />
+        <RatingPoll pollId={pollId} token={token} />
       ) : (
         <div className="flex flex-col gap-2 mb-4">
-          {options.map((opt) => {
-            const pct = totalVotes ? Math.round((opt.votes / totalVotes) * 100) : 0;
-            const isVoted = votedId === opt.id;
+          {options.map((opt, idx) => {
+            const optId = opt.id || opt._id || idx;
+            const pct = totalVotes
+              ? Math.round(((opt.votes || 0) / totalVotes) * 100)
+              : 0;
+            const isVoted = votedId === optId;
             return (
               <button
-                key={opt.id}
-                onClick={() => vote(opt.id)}
+                key={optId}
+                disabled={Boolean(votedId)}
+                onClick={() => vote(optId)}
                 className={`relative w-full text-left overflow-hidden rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors focus-ring ${
                   votedId
-                    ? "border-[var(--color-border)]"
+                    ? "border-[var(--color-border)] cursor-default"
                     : "border-[var(--color-border)] hover:border-[var(--color-brand)]/50 hover:bg-[var(--color-surface-hover)]"
                 } ${isVoted ? "border-[var(--color-brand)]" : ""}`}
               >
-                {votedId && (
+                {votedId ? (
                   <div
-                    className="absolute inset-y-0 left-0 bg-[var(--color-brand)]/10"
+                    className="absolute inset-y-0 left-0 bg-[var(--color-brand)]/10 transition-all duration-500"
                     style={{ width: `${pct}%` }}
                   />
-                )}
-                <span className="relative flex items-center justify-between">
+                ) : null}
+                <span className="relative flex items-center justify-between z-10">
                   <span className="flex items-center gap-2">
                     {poll.type === "yesno" ? (
                       <Icon
-                        name={opt.id === "yes" ? "check" : "logout"}
+                        name={
+                          opt.label?.toLowerCase() === "yes" || optId === "yes"
+                            ? "check"
+                            : "logout"
+                        }
                         size={14}
-                        className={opt.id === "yes" ? "text-[var(--color-brand)]" : "text-red-400"}
+                        className={
+                          opt.label?.toLowerCase() === "yes" || optId === "yes"
+                            ? "text-[var(--color-brand)]"
+                            : "text-red-400"
+                        }
                       />
                     ) : (
                       <span className="w-5 h-5 rounded-full bg-[var(--color-border-light)] flex items-center justify-center text-[10px] font-bold">
-                        {opt.id.toUpperCase().slice(0, 1)}
+                        {String.fromCharCode(65 + idx)}
                       </span>
                     )}
-                    {opt.label}
+                    {opt.label || opt.text}
                   </span>
-                  {votedId && <span className="text-[var(--color-text-muted)]">{pct}%</span>}
+                  {votedId ? (
+                    <span className="text-[var(--color-text-muted)] font-normal">
+                      {pct}%
+                    </span>
+                  ) : null}
                 </span>
               </button>
             );
@@ -103,11 +198,14 @@ export default function PollCard({ poll }) {
         </div>
       )}
 
+      {/* Action Footer */}
       <div className="flex items-center gap-5 pt-1 text-[var(--color-text-muted)]">
         <button
           onClick={toggleUpvote}
           className={`flex items-center gap-1.5 text-sm font-medium transition-colors focus-ring rounded-md px-1 ${
-            upvoted ? "text-[var(--color-brand)]" : "hover:text-[var(--color-text)]"
+            upvoted
+              ? "text-[var(--color-brand)]"
+              : "hover:text-[var(--color-text)]"
           }`}
         >
           <Icon name="up" size={15} />
@@ -115,16 +213,18 @@ export default function PollCard({ poll }) {
         </button>
         <button className="flex items-center gap-1.5 text-sm font-medium hover:text-[var(--color-text)] transition-colors focus-ring rounded-md px-1">
           <Icon name="message" size={15} />
-          {poll.comments}
+          {poll.commentsCount || poll.comments || 0}
         </button>
         <button
-          onClick={() => setSaved((s) => !s)}
+          onClick={toggleBookmark}
           className={`flex items-center gap-1.5 text-sm font-medium transition-colors focus-ring rounded-md px-1 ${
-            saved ? "text-[var(--color-brand)]" : "hover:text-[var(--color-text)]"
+            saved
+              ? "text-[var(--color-brand)]"
+              : "hover:text-[var(--color-text)]"
           }`}
         >
           <Icon name="bookmark" size={15} />
-          {poll.saves + (saved ? 1 : 0)}
+          {(poll.saves || 0) + (saved ? 1 : 0)}
         </button>
         <button className="ml-auto flex items-center gap-1.5 text-sm font-medium hover:text-[var(--color-text)] transition-colors focus-ring rounded-md px-1">
           <Icon name="share" size={15} />
@@ -134,19 +234,39 @@ export default function PollCard({ poll }) {
   );
 }
 
-function RatingPoll() {
+function RatingPoll({ pollId, token }) {
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
+
+  const handleRate = async (n) => {
+    if (rating > 0) return;
+    setRating(n);
+
+    try {
+      await fetch(`${API_BASE_URL}/polls/${pollId}/rate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify({ rating: n }),
+      });
+    } catch (err) {
+      console.error("Failed to rate poll:", err);
+    }
+  };
+
   return (
     <div className="flex items-center gap-1.5 mb-4">
       {[1, 2, 3, 4, 5].map((n) => (
         <button
           key={n}
-          onClick={() => setRating(n)}
+          onClick={() => handleRate(n)}
           onMouseEnter={() => setHover(n)}
           onMouseLeave={() => setHover(0)}
-          className="focus-ring rounded"
+          className="focus-ring rounded transition-transform hover:scale-110"
           aria-label={`Rate ${n}`}
+          disabled={rating > 0}
         >
           <Icon
             name="star"
@@ -160,7 +280,9 @@ function RatingPoll() {
         </button>
       ))}
       {rating > 0 && (
-        <span className="ml-2 text-sm text-[var(--color-text-muted)]">You rated {rating}/5</span>
+        <span className="ml-2 text-sm text-[var(--color-text-muted)]">
+          You rated {rating}/5
+        </span>
       )}
     </div>
   );

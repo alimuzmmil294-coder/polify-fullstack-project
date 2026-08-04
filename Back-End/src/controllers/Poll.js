@@ -47,7 +47,6 @@ export const createPoll = async (req, res) => {
         message: "Question and Type are required.",
         success: false,
       });
-      
     }
 
     let options = [];

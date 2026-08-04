@@ -4,11 +4,14 @@ const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true); // 👈 Track initialization
+  const [token, setToken] = useState(null); // 1. Add state for token
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user data / token exists in localStorage on page load
+    // 2. Read both user and token from localStorage on initialization
     const storedUser = localStorage.getItem("user");
+    const storedToken = localStorage.getItem("token");
+
     if (storedUser) {
       try {
         setUser(JSON.parse(storedUser));
@@ -17,23 +20,39 @@ export function AuthProvider({ children }) {
         localStorage.removeItem("user");
       }
     }
-    setLoading(false); // 👈 Initialization finished!
+
+    if (storedToken) {
+      setToken(storedToken);
+    }
+
+    setLoading(false);
   }, []);
 
-  const login = (userData, token) => {
+  const login = (userData, authToken) => {
     setUser(userData);
     localStorage.setItem("user", JSON.stringify(userData));
-    if (token) localStorage.setItem("token", token);
+
+    if (authToken) {
+      setToken(authToken); // 3. Update token state on login
+      localStorage.setItem("token", authToken);
+    }
   };
 
   const logout = () => {
     setUser(null);
+    setToken(null); // 4. Clear token state on logout
     localStorage.removeItem("user");
     localStorage.removeItem("token");
   };
 
+  // Helper getters
+  const email = user?.email || "";
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    // 5. Expose token and email in context value
+    <AuthContext.Provider
+      value={{ user, token, email, loading, login, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );
