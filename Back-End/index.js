@@ -10,7 +10,10 @@ const app = express();
 // 3. Connect to database
 dbConnection();
 
-app.use(cors())
+app.use(cors({
+  origin:"https://polify-fullstack-project-ao42.vercel.app/",
+  credentials:true
+}))
 app.use(express.json());
 
 app.use("/api", allRoutes);
